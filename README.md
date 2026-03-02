@@ -1,2 +1,3 @@
-# FoodRescue-Intelligence
-AI-powered food surplus prediction and intelligent redistribution platform aligned with UN SDG 2 &amp; 12 to reduce hunger and food waste through data-driven optimization.
+FoodRescue-Intelligence is an AI-based sustainable redistribution platform designed to tackle food waste and hunger simultaneously. 
+The system leverages machine learning for surplus food prediction, intelligent NGO matching algorithms for efficient allocation, and route optimization techniques for minimizing transportation overhead. 
+Aligned with UN Sustainable Development Goals (SDG 2 & SDG 12), this project demonstrates the integration of data analytics, predictive modeling, and decision optimization to build a socially impactful and scalable solution.
