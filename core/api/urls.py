@@ -1,22 +1,20 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import FoodDonationViewSet, NGOViewSet, AllocationViewSet, auto_allocate
+from .views import FoodDonationViewSet, NGOViewSet, AllocationViewSet, auto_allocate, RegisterView
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-# Router setup
 router = DefaultRouter()
 router.register(r'donations', FoodDonationViewSet)
 router.register(r'ngos', NGOViewSet)
 router.register(r'allocations', AllocationViewSet)
 
-# URL patterns
 urlpatterns = [
-    path('auto-allocate/', auto_allocate),  # 🤖 ML-based allocation
-    path('', include(router.urls)),         # CRUD APIs
-]
-from django.contrib import admin
-from django.urls import path, include
+    path('', include(router.urls)),
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
+    # 🔐 AUTH
+    path('register/', RegisterView.as_view()),
+    path('login/', TokenObtainPairView.as_view()),
+
+    # 🤖 AI
+    path('auto-allocate/', auto_allocate),
 ]
