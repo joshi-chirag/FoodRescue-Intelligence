@@ -1,30 +1,59 @@
-from rest_framework import viewsets
-from rest_framework.decorators import api_view
+from rest_framework import viewsets, generics
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 
 from .models import FoodDonation, NGO, Allocation
-from .serializers import FoodDonationSerializer, NGOSerializer, AllocationSerializer
+from .serializers import FoodDonationSerializer, NGOSerializer, AllocationSerializer, RegisterSerializer
 from .utils import haversine
 from .ml_model.predict import predict
+from .permissions import IsDonor, IsNGO
 
 
 # =========================
-# CRUD VIEWSETS
+# AUTH REGISTER VIEW
+# =========================
+
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+
+
+# =========================
+# FOOD DONATION VIEWSET
 # =========================
 
 class FoodDonationViewSet(viewsets.ModelViewSet):
     queryset = FoodDonation.objects.all()
     serializer_class = FoodDonationSerializer
 
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsAuthenticated(), IsDonor()]
+        return [IsAuthenticated()]
+
+
+# =========================
+# NGO VIEWSET
+# =========================
 
 class NGOViewSet(viewsets.ModelViewSet):
     queryset = NGO.objects.all()
     serializer_class = NGOSerializer
+    permission_classes = [IsAuthenticated]
 
+
+# =========================
+# ALLOCATION VIEWSET
+# =========================
 
 class AllocationViewSet(viewsets.ModelViewSet):
     queryset = Allocation.objects.all()
     serializer_class = AllocationSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated(), IsNGO()]
+        return [IsAuthenticated()]
 
 
 # =========================
@@ -32,6 +61,7 @@ class AllocationViewSet(viewsets.ModelViewSet):
 # =========================
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated, IsDonor])
 def auto_allocate(request):
     try:
         donation_id = request.data.get('donation_id')
@@ -63,11 +93,8 @@ def auto_allocate(request):
         # Convert to urgency
         urgency = 1 / (predicted_expiry + 0.1)
 
-        # Priority label (optional)
-        if predicted_expiry < 10:
-            priority = "HIGH"
-        else:
-            priority = "NORMAL"
+        # Priority label
+        priority = "HIGH" if predicted_expiry < 10 else "NORMAL"
 
         best_ngo = None
         best_score = -1
@@ -76,11 +103,9 @@ def auto_allocate(request):
         # Loop through NGOs
         for ngo in ngos:
 
-            # Skip NGOs with no capacity
             if ngo.capacity <= 0:
                 continue
 
-            # Skip if coordinates missing
             if None in [food.latitude, food.longitude, ngo.latitude, ngo.longitude]:
                 continue
 
@@ -92,31 +117,28 @@ def auto_allocate(request):
                 ngo.longitude
             )
 
-            # Scoring components
+            # Scoring
             distance_score = 1 / (distance + 0.1)
             capacity_score = ngo.capacity / 100
 
-            # Final score
             score = (
                 0.5 * distance_score +
                 0.3 * urgency +
                 0.2 * capacity_score
             )
 
-            # Debug logs (IMPORTANT)
+            # Debug logs
             print(f"NGO: {ngo.name}")
             print(f"Distance: {distance}")
             print(f"Capacity: {ngo.capacity}")
             print(f"Score: {score}")
             print("----------------------")
 
-            # Select best NGO
             if score > best_score:
                 best_score = score
                 best_ngo = ngo
                 best_distance = distance
 
-        # If no NGO found
         if not best_ngo:
             return Response({"error": "No suitable NGO found"}, status=400)
 
@@ -145,8 +167,3 @@ def auto_allocate(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=500)
-from rest_framework import generics
-from .serializers import RegisterSerializer
-
-class RegisterView(generics.CreateAPIView):
-    serializer_class = RegisterSerializer
