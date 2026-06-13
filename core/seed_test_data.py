@@ -32,69 +32,88 @@ admin_pass = generate_password()
 # ── 1. Create Users ──────────────────────────────────
 print("\n📋 Creating users...")
 
-donor1 = User.objects.create_user(username="donor1", password=donor_pass, role="donor")
-donor2 = User.objects.create_user(username="restaurant_abc", password=donor_pass, role="donor")
-ngo1   = User.objects.create_user(username="HopeTrust", password=ngo_pass, role="ngo")
-ngo2   = User.objects.create_user(username="FeedIndia", password=ngo_pass, role="ngo")
-admin  = User.objects.create_superuser(username="admin", password=admin_pass, email="admin@foodrescue.com")
+def get_or_create_user(username, password, role, is_superuser=False):
+    user = User.objects.filter(username=username).first()
+    if user:
+        user.set_password(password)
+        user.role = role
+        user.is_superuser = is_superuser
+        user.is_staff = is_superuser
+        user.save()
+        print(f"  🔄 {username} updated/resecured")
+    else:
+        if is_superuser:
+            user = User.objects.create_superuser(username=username, password=password, email=f"{username}@foodrescue.com")
+        else:
+            user = User.objects.create_user(username=username, password=password, role=role)
+        print(f"  ✅ {username} created")
+    return user
 
-print(f"  ✅ donor1         — Donor")
-print(f"  ✅ restaurant_abc — Donor")
-print(f"  ✅ HopeTrust      — NGO")
-print(f"  ✅ FeedIndia      — NGO")
-print(f"  ✅ admin          — Superuser")
+donor1 = get_or_create_user("donor1", donor_pass, "donor")
+donor2 = get_or_create_user("restaurant_abc", donor_pass, "donor")
+ngo1   = get_or_create_user("HopeTrust", ngo_pass, "ngo")
+ngo2   = get_or_create_user("FeedIndia", ngo_pass, "ngo")
+admin  = get_or_create_user("admin", admin_pass, "admin", is_superuser=True)
 
 # ── 2. Create NGOs (with real Delhi/Mumbai coordinates) ──
 print("\n🏢 Creating NGOs...")
 
-ngos = [
-    NGO.objects.create(
-        name="HopeTrust",
-        location="Connaught Place, New Delhi",
-        capacity=200,
-        latitude=28.6315,
-        longitude=77.2167,
-        email="hope@trust.org",
-        phone="9911001100",
-        is_active=True,
-    ),
-    NGO.objects.create(
-        name="FeedIndia",
-        location="Karol Bagh, New Delhi",
-        capacity=150,
-        latitude=28.6519,
-        longitude=77.1909,
-        email="feed@india.org",
-        phone="9922002200",
-        is_active=True,
-    ),
-    NGO.objects.create(
-        name="AnnaSeva",
-        location="Lajpat Nagar, New Delhi",
-        capacity=100,
-        latitude=28.5692,
-        longitude=77.2400,
-        email="anna@seva.org",
-        phone="9933003300",
-        is_active=True,
-    ),
-    NGO.objects.create(
-        name="RotiBank",
-        location="Dwarka, New Delhi",
-        capacity=300,
-        latitude=28.5921,
-        longitude=77.0460,
-        email="roti@bank.org",
-        phone="9944004400",
-        is_active=True,
-    ),
+ngos_data = [
+    {
+        "name": "HopeTrust",
+        "location": "Connaught Place, New Delhi",
+        "capacity": 200,
+        "latitude": 28.6315,
+        "longitude": 77.2167,
+        "email": "hope@trust.org",
+        "phone": "9911001100",
+        "is_active": True,
+    },
+    {
+        "name": "FeedIndia",
+        "location": "Karol Bagh, New Delhi",
+        "capacity": 150,
+        "latitude": 28.6519,
+        "longitude": 77.1909,
+        "email": "feed@india.org",
+        "phone": "9922002200",
+        "is_active": True,
+    },
+    {
+        "name": "AnnaSeva",
+        "location": "Lajpat Nagar, New Delhi",
+        "capacity": 100,
+        "latitude": 28.5692,
+        "longitude": 77.2400,
+        "email": "anna@seva.org",
+        "phone": "9933003300",
+        "is_active": True,
+    },
+    {
+        "name": "RotiBank",
+        "location": "Dwarka, New Delhi",
+        "capacity": 300,
+        "latitude": 28.5921,
+        "longitude": 77.0460,
+        "email": "roti@bank.org",
+        "phone": "9944004400",
+        "is_active": True,
+    },
 ]
 
-for ngo in ngos:
-    print(f"  ✅ {ngo.name} — {ngo.location} (cap: {ngo.capacity})")
+for data in ngos_data:
+    ngo, created = NGO.objects.update_or_create(
+        name=data["name"],
+        defaults=data
+    )
+    status_str = "created" if created else "updated"
+    print(f"  ✅ {ngo.name} — {ngo.location} ({status_str})")
 
 # ── 3. Create a sample donation (pending) ────────────
 print("\n🍱 Creating sample donation...")
+
+# Clean up older Biryani donations to avoid duplicate listing clutter
+FoodDonation.objects.filter(created_by=donor1, food_type="Biryani").delete()
 
 donation = FoodDonation.objects.create(
     created_by=donor1,
