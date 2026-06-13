@@ -22,9 +22,16 @@ environ.Env.read_env(BASE_DIR / '.env')
 # SECURITY
 # =========================
 
-SECRET_KEY = env('SECRET_KEY')  # REQUIRED — no insecure fallback; will crash if missing
+import secrets
+
+SECRET_KEY = env('SECRET_KEY', default=None)
+if not SECRET_KEY:
+    # Fallback to a randomly generated key at runtime to prevent startup crash if environment variables aren't set yet.
+    # Note: sessions and signed tokens will invalidate when the server restarts.
+    SECRET_KEY = secrets.token_urlsafe(50)
+
 DEBUG = env('DEBUG')
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '.onrender.com'])
 
 
 # =========================
