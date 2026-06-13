@@ -3,6 +3,7 @@ import sys
 import django
 import requests
 import io
+import secrets
 
 BASE = "http://127.0.0.1:8000/api"
 
@@ -30,10 +31,14 @@ print("  " + "="*58)
 get_user_model().objects.filter(username="pwreset_user").delete()
 FoodDonation.objects.filter(food_type="Gulab Jamun").delete()
 
+# Generate secure test passwords at runtime
+TEST_PASS = secrets.token_urlsafe(12)
+TEST_NEW_PASS = secrets.token_urlsafe(12)
+
 # 1. TEST PASSWORD RESET FLOW
 print("\n  [1] TESTING PASSWORD RESET FLOW")
 # Register temporary user
-r = requests.post(f"{BASE}/register/", json={"username": "pwreset_user", "password": "oldpassword123", "role": "donor"})
+r = requests.post(f"{BASE}/register/", json={"username": "pwreset_user", "password": TEST_PASS, "role": "donor"})
 check("Register temporary user", r.status_code == 201, f"status={r.status_code}")
 
 # Request reset OTP
@@ -50,12 +55,12 @@ check("OTP successfully saved in DB", otp is not None, f"otp={otp}")
 r = requests.post(f"{BASE}/password-reset/confirm/", json={
     "username": "pwreset_user",
     "otp": otp,
-    "new_password": "newpassword123"
+    "new_password": TEST_NEW_PASS
 })
 check("Confirm Reset status code 200", r.status_code == 200, f"status={r.status_code}")
 
 # Login with new password
-r = requests.post(f"{BASE}/login/", json={"username": "pwreset_user", "password": "newpassword123"})
+r = requests.post(f"{BASE}/login/", json={"username": "pwreset_user", "password": TEST_NEW_PASS})
 check("Login with new password succeeds", r.status_code == 200, f"status={r.status_code}")
 donor_token = r.json().get("access")
 
@@ -95,7 +100,7 @@ user.role = "admin"
 user.save()
 
 # Login again to get token with admin role
-r = requests.post(f"{BASE}/login/", json={"username": "pwreset_user", "password": "newpassword123"})
+r = requests.post(f"{BASE}/login/", json={"username": "pwreset_user", "password": TEST_NEW_PASS})
 check("Admin login post succeeds", r.status_code == 200, f"status={r.status_code} response={r.text}")
 admin_token = r.json().get("access")
 headers = {"Authorization": f"Bearer {admin_token}"}

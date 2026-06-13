@@ -6,6 +6,7 @@ Make sure: python manage.py runserver is running in another terminal.
 import sys
 import requests
 import os
+import secrets
 import django
 
 # Set up django environment to query DB and perform Django operations
@@ -23,6 +24,11 @@ FoodDonation.objects.filter(food_type="Paneer Tikka").delete()
 
 BASE = "http://127.0.0.1:8000/api"
 results = []
+
+# Auto-generate test passwords (not stored in git)
+TEST_DONOR_PASS = os.environ.get('TEST_DONOR_PASSWORD', secrets.token_urlsafe(12))
+TEST_NGO_PASS = os.environ.get('TEST_NGO_PASSWORD', secrets.token_urlsafe(12))
+TEST_ADMIN_PASS = os.environ.get('TEST_ADMIN_PASSWORD', secrets.token_urlsafe(12))
 
 def check(label, condition, detail=""):
     status = "PASS" if condition else "FAIL"
@@ -52,18 +58,22 @@ print("  " + "="*53)
 
 # ── 1. REGISTRATION ──────────────────────────────────
 print("\n  [1] REGISTRATION")
-r = post("/register/", {"username": "apitest_donor", "password": "test1234", "role": "donor"})
+r = post("/register/", {"username": "apitest_donor", "password": TEST_DONOR_PASS, "role": "donor"})
 check("Register new donor", r.status_code == 201, f"status={r.status_code}")
 
-r = post("/register/", {"username": "apitest_ngo", "password": "test1234", "role": "ngo"})
+r = post("/register/", {"username": "apitest_ngo", "password": TEST_NGO_PASS, "role": "ngo"})
 check("Register new NGO", r.status_code == 201, f"status={r.status_code}")
 
-r = post("/register/", {"username": "donor1", "password": "any", "role": "donor"})
+r = post("/register/", {"username": "donor1", "password": TEST_DONOR_PASS, "role": "donor"})
 check("Duplicate username rejected", r.status_code == 400, f"status={r.status_code}")
 
 # ── 2. LOGIN ──────────────────────────────────────────
 print("\n  [2] LOGIN / JWT")
-r = post("/login/", {"username": "donor1", "password": "donor123"})
+# NOTE: These test logins require that seed_test_data.py was run first to create these accounts.
+# Set SEED_DONOR_PASSWORD and SEED_NGO_PASSWORD env vars to match the passwords printed by seed_test_data.py
+SEED_DONOR_PASS = os.environ.get('SEED_DONOR_PASSWORD', '')
+SEED_NGO_PASS = os.environ.get('SEED_NGO_PASSWORD', '')
+r = post("/login/", {"username": "donor1", "password": SEED_DONOR_PASS})
 check("Donor login succeeds", r.status_code == 200, f"status={r.status_code}")
 donor_data = r.json()
 check("Login returns access token", "access" in donor_data)
@@ -71,13 +81,13 @@ check("Login returns role=donor", donor_data.get("role") == "donor", f"role={don
 check("Login returns username", donor_data.get("username") == "donor1", f"username={donor_data.get('username')}")
 DONOR_TOKEN = donor_data.get("access", "")
 
-r = post("/login/", {"username": "HopeTrust", "password": "ngo123"})
+r = post("/login/", {"username": "HopeTrust", "password": SEED_NGO_PASS})
 check("NGO login succeeds", r.status_code == 200)
 ngo_data = r.json()
 check("NGO role=ngo returned", ngo_data.get("role") == "ngo", f"role={ngo_data.get('role')}")
 NGO_TOKEN = ngo_data.get("access", "")
 
-r = post("/login/", {"username": "donor1", "password": "WRONG"})
+r = post("/login/", {"username": "donor1", "password": secrets.token_urlsafe(8)})
 check("Wrong password rejected (401)", r.status_code == 401, f"status={r.status_code}")
 
 # ── 3. FOOD DONATIONS ────────────────────────────────

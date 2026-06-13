@@ -1,9 +1,12 @@
 """
 Seed script — creates test users, NGOs, and verifies the full flow.
 Run with: python seed_test_data.py
+
+⚠️ FOR LOCAL DEVELOPMENT ONLY — Do not use in production.
 """
 import os
 import sys
+import secrets
 import django
 
 # Setup Django
@@ -13,22 +16,33 @@ django.setup()
 
 from api.models import User, NGO, FoodDonation, Allocation
 
+
+def generate_password():
+    """Generate a secure random password for test accounts."""
+    return secrets.token_urlsafe(12)
+
+
 print("\n🌱 FoodRescue Intelligence — Seeding Test Data\n" + "="*50)
+
+# Generate secure passwords for each test account
+donor_pass = generate_password()
+ngo_pass = generate_password()
+admin_pass = generate_password()
 
 # ── 1. Create Users ──────────────────────────────────
 print("\n📋 Creating users...")
 
-donor1 = User.objects.create_user(username="donor1", password="donor123", role="donor")
-donor2 = User.objects.create_user(username="restaurant_abc", password="donor123", role="donor")
-ngo1   = User.objects.create_user(username="HopeTrust", password="ngo123", role="ngo")
-ngo2   = User.objects.create_user(username="FeedIndia", password="ngo123", role="ngo")
-admin  = User.objects.create_superuser(username="admin", password="admin123", email="admin@foodrescue.com")
+donor1 = User.objects.create_user(username="donor1", password=donor_pass, role="donor")
+donor2 = User.objects.create_user(username="restaurant_abc", password=donor_pass, role="donor")
+ngo1   = User.objects.create_user(username="HopeTrust", password=ngo_pass, role="ngo")
+ngo2   = User.objects.create_user(username="FeedIndia", password=ngo_pass, role="ngo")
+admin  = User.objects.create_superuser(username="admin", password=admin_pass, email="admin@foodrescue.com")
 
-print(f"  ✅ donor1         (pass: donor123) — Donor")
-print(f"  ✅ restaurant_abc (pass: donor123) — Donor")
-print(f"  ✅ HopeTrust      (pass: ngo123)   — NGO")
-print(f"  ✅ FeedIndia      (pass: ngo123)   — NGO")
-print(f"  ✅ admin          (pass: admin123) — Superuser")
+print(f"  ✅ donor1         — Donor")
+print(f"  ✅ restaurant_abc — Donor")
+print(f"  ✅ HopeTrust      — NGO")
+print(f"  ✅ FeedIndia      — NGO")
+print(f"  ✅ admin          — Superuser")
 
 # ── 2. Create NGOs (with real Delhi/Mumbai coordinates) ──
 print("\n🏢 Creating NGOs...")
@@ -97,15 +111,16 @@ print(f"  ✅ Donation #{donation.id}: {donation.food_type} ({donation.quantity}
 
 print("\n" + "="*50)
 print("✅ Done! All test data created.")
-print("\n📌 Login Credentials:")
-print("  Donor:  username=donor1,         password=donor123")
-print("  Donor:  username=restaurant_abc, password=donor123")
-print("  NGO:    username=HopeTrust,      password=ngo123")
-print("  NGO:    username=FeedIndia,      password=ngo123")
-print("  Admin:  username=admin,          password=admin123")
+print("\n📌 Login Credentials (auto-generated — use these locally):")
+print(f"  Donor:  username=donor1,         password={donor_pass}")
+print(f"  Donor:  username=restaurant_abc, password={donor_pass}")
+print(f"  NGO:    username=HopeTrust,      password={ngo_pass}")
+print(f"  NGO:    username=FeedIndia,      password={ngo_pass}")
+print(f"  Admin:  username=admin,          password={admin_pass}")
 print("\n🌐 URLs:")
 print("  Frontend:   http://localhost:5173")
 print("  Backend:    http://127.0.0.1:8000")
 print("  Admin:      http://127.0.0.1:8000/admin")
 print("  API Root:   http://127.0.0.1:8000/api/")
 print("="*50 + "\n")
+

@@ -14,7 +14,7 @@ from .serializers import (
 )
 from .utils import haversine, auto_expire_donations, send_allocation_email
 from .ml_model.predict import predict
-from .permissions import IsDonor, IsNGO
+from .permissions import IsDonor, IsNGO, IsAdmin
 
 
 # =========================
@@ -333,7 +333,10 @@ def auto_allocate(request):
         return Response({"error": "Food donation not found"}, status=404)
 
     except Exception as e:
-        return Response({"error": str(e)}, status=500)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Auto-allocation failed")
+        return Response({"error": "An internal error occurred during allocation. Please try again."}, status=500)
 
 
 # =========================
@@ -464,10 +467,11 @@ def track_donation(request, pk):
 # PASSWORD RESET API
 # =========================
 
-import random
+import secrets
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
+from django.conf import settings as django_settings
 
 User = get_user_model()
 
@@ -490,8 +494,8 @@ def password_reset_request(request):
         # Return generic success to prevent user enumeration
         return Response({"message": "If the account exists, a password reset code has been sent."})
         
-    # Generate 6-digit OTP
-    otp = f"{random.randint(100000, 999999)}"
+    # Generate 6-digit OTP using cryptographically secure random
+    otp = f"{secrets.SystemRandom().randint(100000, 999999)}"
     user.reset_otp = otp
     user.reset_otp_expiry = timezone.now() + timedelta(minutes=15)
     user.save()
@@ -522,7 +526,9 @@ FoodRescue Team
     except Exception as e:
         print(f"Error sending password reset email: {e}")
         
-    print(f"\n[PASSWORD RESET OTP FOR USER {user.username} IS: {otp}]\n")
+    # Only print OTP to console in DEBUG mode (local development)
+    if django_settings.DEBUG:
+        print(f"\n[PASSWORD RESET OTP FOR USER {user.username} IS: {otp}]\n")
     
     return Response({"message": "Password reset code sent."})
 
@@ -566,18 +572,11 @@ def password_reset_confirm(request):
 # ADMIN UI ENDPOINTS
 # =========================
 
-def check_admin(request):
-    """Helper to check if request user is an admin."""
-    return request.user.is_authenticated and (request.user.role == 'admin' or request.user.is_staff)
-
 
 @api_view(['GET', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmin])
 def admin_users(request, pk=None):
     """Manage users in the system."""
-    if not check_admin(request):
-        return Response({"error": "Access denied. Admin role required."}, status=403)
-        
     if request.method == 'GET':
         users = User.objects.all().order_by('-date_joined')
         data = [{
@@ -632,12 +631,9 @@ def admin_users(request, pk=None):
 
 
 @api_view(['GET', 'PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmin])
 def admin_ngos(request, pk=None):
     """Manage NGOs capacity and active status."""
-    if not check_admin(request):
-        return Response({"error": "Access denied. Admin role required."}, status=403)
-        
     if request.method == 'GET':
         ngos = NGO.objects.all().order_by('name')
         data = [{
@@ -685,12 +681,9 @@ def admin_ngos(request, pk=None):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdmin])
 def admin_cleanup_expired(request):
     """Scan and mark expired donations as 'expired'."""
-    if not check_admin(request):
-        return Response({"error": "Access denied. Admin role required."}, status=403)
-        
     now = timezone.now()
     expired_donations = FoodDonation.objects.filter(
         expiry_time__lt=now,
