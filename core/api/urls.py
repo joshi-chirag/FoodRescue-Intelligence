@@ -26,7 +26,10 @@ router.register(r'donations', FoodDonationViewSet, basename='donation')
 router.register(r'ngos', NGOViewSet, basename='ngo')
 router.register(r'allocations', AllocationViewSet, basename='allocation')
 
+from django.http import JsonResponse
+
 urlpatterns = [
+    path('health/', lambda req: JsonResponse({"status": "healthy"}, status=200), name='api_health'),
     path('', include(router.urls)),
 
     # 🔐 AUTH

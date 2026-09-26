@@ -19,8 +19,25 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+
+
+def health_check(request):
+    """Health check endpoint for Render and monitoring probes."""
+    return JsonResponse({
+        "status": "healthy",
+        "service": "FoodRescue Intelligence API",
+        "version": "1.0.0"
+    }, status=200)
+
 
 urlpatterns = [
+    # Health checks for Render uptime and deploy verification
+    path('', health_check, name='root_health'),
+    path('health/', health_check, name='health_check'),
+    path('healthz/', health_check, name='healthz'),
+
+    # Admin & API routes
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
 ]

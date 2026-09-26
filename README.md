@@ -169,10 +169,18 @@ npm run dev
 ## 🌍 Production Deployments
 
 ### Backend Service (Render + Supabase)
-1. Commit changes to GitHub.
-2. Link the repository to Render as a **Web Service**.
-3. Point database settings to your **Supabase PostgreSQL** instance pooler.
-4. Set required variables (`SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`).
+1. Commit and push changes to GitHub.
+2. Link the repository to Render as a **Web Service** (or let Render auto-configure via `render.yaml`).
+3. If configuring manually:
+   - **Root Directory**: `core` (or root)
+   - **Build Command**: `./build.sh` (or `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate`)
+   - **Start Command**: `gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
+   - **Health Check Path**: `/health/`
+4. Set required Environment Variables on Render:
+   - `DEBUG`: `False`
+   - `DATABASE_URL`: Your Supabase pooler connection string (port 6543)
+   - `ALLOWED_HOSTS`: `.onrender.com,localhost,127.0.0.1` (or your custom domain)
+   - `CORS_ALLOWED_ORIGINS`: `https://your-frontend.vercel.app` (optional, regex matches `*.vercel.app` automatically)
 
 ### Frontend Service (Vercel)
 1. Import the repository on Vercel.

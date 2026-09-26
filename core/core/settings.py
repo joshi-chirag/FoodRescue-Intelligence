@@ -12,8 +12,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 env = environ.Env(
     DEBUG=(bool, False),
-    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
-    CORS_ALLOWED_ORIGINS=(list, ['http://localhost:5173', 'http://127.0.0.1:5173']),
 )
 environ.Env.read_env(BASE_DIR / '.env')
 
@@ -27,11 +25,21 @@ import secrets
 SECRET_KEY = env('SECRET_KEY', default=None)
 if not SECRET_KEY:
     # Fallback to a randomly generated key at runtime to prevent startup crash if environment variables aren't set yet.
-    # Note: sessions and signed tokens will invalidate when the server restarts.
     SECRET_KEY = secrets.token_urlsafe(50)
 
-DEBUG = env('DEBUG')
+DEBUG = env.bool('DEBUG', default=False)
+
+# ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '.onrender.com'])
+
+# Automatically ensure Render hostnames and local development are always permitted
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+for host in ['.onrender.com', 'localhost', '127.0.0.1']:
+    if host not in ALLOWED_HOSTS and '*' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 
 
 # =========================
@@ -48,6 +56,7 @@ INSTALLED_APPS = [
     # Third party
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     # Local
     'api',
@@ -106,6 +115,10 @@ DATABASES = {
     )
 }
 
+# Supabase PgBouncer (transaction pooler on port 6543) requires disabling server-side cursors
+if DATABASES['default'].get('ENGINE') == 'django.db.backends.postgresql':
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+
 
 # =========================
 # AUTH
@@ -132,12 +145,25 @@ USE_TZ = True
 
 
 # =========================
-# STATIC FILES
+# STATIC FILES & STORAGES (Django 4.2+ / 5.x)
 # =========================
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+GS_BUCKET_NAME = env('GS_BUCKET_NAME', default=None)
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage" if GS_BUCKET_NAME else "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# Prevent collectstatic crash if static files reference missing assets
+WHITENOISE_MANIFEST_STRICT = False
 
 
 # =========================
@@ -145,9 +171,18 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # =========================
 
 if not DEBUG:
-    # HTTPS enforcement
-    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    # HTTPS enforcement — Render handles SSL at the edge proxy.
+    # Default to False to prevent health check 301 redirect loops.
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # Allow health check paths to bypass SSL redirects
+    SECURE_REDIRECT_EXEMPT = [
+        r'^/?$',
+        r'^health/?$',
+        r'^healthz/?$',
+        r'^api/health/?$',
+    ]
 
     # HSTS — tell browsers to always use HTTPS
     SECURE_HSTS_SECONDS = 31536000  # 1 year
@@ -203,7 +238,7 @@ SIMPLE_JWT = {
 
 
 # =========================
-# CORS
+# CORS & CSRF
 # =========================
 
 CORS_ALLOWED_ORIGINS = env.list(
@@ -212,10 +247,25 @@ CORS_ALLOWED_ORIGINS = env.list(
 )
 CORS_ALLOW_CREDENTIALS = True
 
+# Allow any Vercel deployment and Render service to make API requests
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https:\/\/.*\.vercel\.app$",
+    r"^https:\/\/.*\.onrender\.com$",
+]
+
 CSRF_TRUSTED_ORIGINS = env.list(
     'CSRF_TRUSTED_ORIGINS',
     default=['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:8000', 'http://127.0.0.1:8000']
 )
+
+if RENDER_EXTERNAL_HOSTNAME:
+    render_origin = f"https://{RENDER_EXTERNAL_HOSTNAME}"
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
+
+for trusted in ['https://*.onrender.com', 'https://*.vercel.app']:
+    if trusted not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(trusted)
 
 
 # =========================
@@ -235,10 +285,7 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='FoodRescue <noreply@food
 # MEDIA FILES (LOCAL OR PERSISTENT CLOUD STORAGE)
 # =========================
 
-GS_BUCKET_NAME = env('GS_BUCKET_NAME', default=None)
-
 if GS_BUCKET_NAME:
-    DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
     GS_PROJECT_ID = env('GS_PROJECT_ID', default=None)
     
     # Credentials JSON loaded directly from environment
